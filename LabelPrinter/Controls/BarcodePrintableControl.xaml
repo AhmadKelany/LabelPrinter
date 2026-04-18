@@ -1,0 +1,32 @@
+<UserControl x:Class="LabelPrinter.Controls.BarcodePrintableControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Height="140" Width="300">
+    <Border BorderBrush="Gray" BorderThickness="1" Padding="4" Margin="2">
+        <StackPanel>
+            <TextBlock Text="Barcode" FontWeight="Bold" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Data:" Width="50" VerticalAlignment="Center" />
+                <TextBox Text="{Binding BarcodeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Type:" Width="50" />
+                <ComboBox SelectedValue="{Binding BarcodeType, Mode=TwoWay}" Width="120">
+                    <ComboBoxItem Content="OneD" />
+                    <ComboBoxItem Content="QR" />
+                </ComboBox>
+                <CheckBox Content="Show Text" IsChecked="{Binding ShowBarcodeText, Mode=TwoWay}" Margin="8,0,0,0" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="X:" Width="20" />
+                <TextBox Text="{Binding X, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <TextBlock Text="Y:" Width="20" />
+                <TextBox Text="{Binding Y, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <TextBlock Text="W:" Width="20" />
+                <TextBox Text="{Binding Width, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <TextBlock Text="H:" Width="20" />
+                <TextBox Text="{Binding Height, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -4,9 +4,82 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:LabelPrinter"
+        xmlns:models="clr-namespace:LabelPrinter.Models"
+        xmlns:controls="clr-namespace:LabelPrinter.Controls"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" Height="450" Width="800" Background="#FFD7C8A6">
+
+    <!-- DataTemplates for items -->
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type models:ImagePrintable}">
+            <controls:ImagePrintableControl />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type models:TextPrintable}">
+            <controls:TextPrintableControl />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type models:BarcodePrintable}">
+            <controls:BarcodePrintableControl />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type models:RectanglePrintable}">
+            <controls:RectanglePrintableControl />
+        </DataTemplate>
+    </Window.Resources>
+
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3*" />
+            <ColumnDefinition Width="5*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Left pane: controls -->
+        <StackPanel Grid.Column="0" Margin="8">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,8">
+                <Button x:Name="AddImageBtn" Content="Add Image" Click="AddImageBtn_Click" Margin="0,0,4,0" />
+                <Button x:Name="AddTextBtn" Content="Add Text" Click="AddTextBtn_Click" Margin="0,0,4,0" />
+                <Button x:Name="AddBarcodeBtn" Content="Add Barcode" Click="AddBarcodeBtn_Click" Margin="0,0,4,0" />
+                <Button x:Name="AddRectBtn" Content="Add Rectangle" Click="AddRectBtn_Click" />
+            </StackPanel>
+
+            <ListBox x:Name="ItemsListBox" Height="260" HorizontalContentAlignment="Stretch" />
+
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Text="Printer:" VerticalAlignment="Center" Width="60" />
+                <ComboBox x:Name="PrintersCombo" Width="220" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Text="Label W (cm):" VerticalAlignment="Center" Width="80" />
+                <TextBox x:Name="LabelWidthTextBox" Width="60" Text="5" TextChanged="LabelSizeTextBox_TextChanged" />
+                <TextBlock Text="H (cm):" VerticalAlignment="Center" Width="40" Margin="8,0,0,0" />
+                <TextBox x:Name="LabelHeightTextBox" Width="60" Text="3" TextChanged="LabelSizeTextBox_TextChanged" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Text="Count:" VerticalAlignment="Center" Width="60" />
+                <TextBox x:Name="CountTextBox" Width="60" Text="1" />
+                <Button x:Name="RefreshPreviewBtn" Content="Refresh Preview" Click="RefreshPreviewBtn_Click" Margin="8,0,0,0" />
+            </StackPanel>
+
+            <Button x:Name="PrintBtn" Content="Print" Click="PrintBtn_Click" Margin="0,12,0,0" Width="120" />
+        </StackPanel>
+
+        <!-- Right pane: preview -->
+        <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Margin="8">
+            <Grid>
+                <ScrollViewer>
+                    <Image x:Name="PreviewImage" Stretch="None" />
+                </ScrollViewer>
+
+                <!-- Preview pending indicator overlay -->
+                <Border x:Name="PreviewPendingPanel" Background="#88FFFFFF" CornerRadius="4" Padding="8" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ProgressBar IsIndeterminate="True" Width="100" Height="12" Margin="0,0,8,0" />
+                        <TextBlock Text="Preview pending..." VerticalAlignment="Center" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
 
     </Grid>
 </Window>

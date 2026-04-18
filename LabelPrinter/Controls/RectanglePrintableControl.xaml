@@ -1,0 +1,35 @@
+<UserControl x:Class="LabelPrinter.Controls.RectanglePrintableControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Height="130" Width="300">
+    <Border BorderBrush="Gray" BorderThickness="1" Padding="4" Margin="2">
+        <StackPanel>
+            <TextBlock Text="Rectangle" FontWeight="Bold" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Stroke Th:" Width="80" VerticalAlignment="Center" />
+                <TextBox Text="{Binding StrokeThickness, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <TextBlock Text="Corner:" Width="50" Margin="8,0,0,0" />
+                <TextBox Text="{Binding CornerRadius, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Style:" Width="50" />
+                <ComboBox SelectedValue="{Binding LineStyle, Mode=TwoWay}" Width="120">
+                    <ComboBoxItem Content="Continuous" />
+                    <ComboBoxItem Content="Dash" />
+                    <ComboBoxItem Content="Dot" />
+                </ComboBox>
+                <TextBlock Text="(DashPattern optional)" Margin="8,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="X:" Width="20" />
+                <TextBox Text="{Binding X, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <TextBlock Text="Y:" Width="20" />
+                <TextBox Text="{Binding Y, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <TextBlock Text="W:" Width="20" />
+                <TextBox Text="{Binding Width, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <TextBlock Text="H:" Width="20" />
+                <TextBox Text="{Binding Height, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>
