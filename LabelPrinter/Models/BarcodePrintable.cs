@@ -22,5 +22,26 @@ namespace LabelPrinter.Models
 
         // Show the human-readable text under the barcode image
         public bool ShowBarcodeText { get => _showBarcodeText; set => SetProperty(ref _showBarcodeText, value); }
+
+        public override PrintableObject Clone()
+        {
+            var clone = new BarcodePrintable
+            {
+                BarcodeText = BarcodeText,
+                BarcodeType = BarcodeType,
+                ShowBarcodeText = ShowBarcodeText
+            };
+            CopyLayoutTo(clone);
+            return clone;
+        }
+
+        protected override string GetValidationError(string propertyName)
+        {
+            return propertyName switch
+            {
+                nameof(BarcodeText) when string.IsNullOrWhiteSpace(BarcodeText) => "Barcode data is required.",
+                _ => base.GetValidationError(propertyName)
+            };
+        }
     }
 }

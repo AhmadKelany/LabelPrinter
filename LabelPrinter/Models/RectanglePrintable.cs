@@ -11,26 +11,41 @@ namespace LabelPrinter.Models
 
     public class RectanglePrintable : PrintableObject
     {
-        private double _cornerRadius = 0.0;
-        private double _strokeThickness = 1.0;
+        private double _cornerRadiusMm = 0.0;
+        private double _strokeThicknessMm = 0.25;
         private Brush _stroke = Brushes.Black;
         private LineStyle _lineStyle = LineStyle.Continuous;
         private double[]? _dashPattern;
 
-        // Corner radius in device-independent units
-        public double CornerRadius { get => _cornerRadius; set => SetProperty(ref _cornerRadius, value); }
+        public double CornerRadiusMm { get => _cornerRadiusMm; set => SetProperty(ref _cornerRadiusMm, value); }
+        public double StrokeThicknessMm { get => _strokeThicknessMm; set => SetProperty(ref _strokeThicknessMm, value); }
 
-        // Stroke thickness
-        public double StrokeThickness { get => _strokeThickness; set => SetProperty(ref _strokeThickness, value); }
-
-        // Stroke brush
         public Brush Stroke { get => _stroke; set => SetProperty(ref _stroke, value); }
-
-        // Line style for the stroke
         public LineStyle LineStyle { get => _lineStyle; set => SetProperty(ref _lineStyle, value); }
-
-        // Optional custom dash pattern. If set (non-empty), it overrides LineStyle.
-        // Values represent lengths of dashes and gaps in device-independent units.
         public double[]? DashPattern { get => _dashPattern; set => SetProperty(ref _dashPattern, value); }
+
+        public override PrintableObject Clone()
+        {
+            var clone = new RectanglePrintable
+            {
+                CornerRadiusMm = CornerRadiusMm,
+                StrokeThicknessMm = StrokeThicknessMm,
+                Stroke = Stroke,
+                LineStyle = LineStyle,
+                DashPattern = DashPattern?.ToArray()
+            };
+            CopyLayoutTo(clone);
+            return clone;
+        }
+
+        protected override string GetValidationError(string propertyName)
+        {
+            return propertyName switch
+            {
+                nameof(StrokeThicknessMm) when !IsPositiveFinite(StrokeThicknessMm) => "Stroke thickness must be greater than 0 mm.",
+                nameof(CornerRadiusMm) when !IsFinite(CornerRadiusMm) || CornerRadiusMm < 0 => "Corner radius must be 0 mm or greater.",
+                _ => base.GetValidationError(propertyName)
+            };
+        }
     }
 }

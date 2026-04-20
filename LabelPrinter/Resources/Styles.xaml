@@ -79,6 +79,12 @@
     <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="{StaticResource DefaultBorderThickness}" />
     <Setter Property="FontFamily" Value="{StaticResource AppFont}" />
+    <Style.Triggers>
+      <Trigger Property="Validation.HasError" Value="True">
+        <Setter Property="BorderBrush" Value="#FFD32F2F" />
+        <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}" />
+      </Trigger>
+    </Style.Triggers>
   </Style>
 
   <!-- ListBoxItem selection visuals -->
@@ -90,7 +96,8 @@
       <Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
           <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}">
-            <ContentPresenter />
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsSelected" Value="True">

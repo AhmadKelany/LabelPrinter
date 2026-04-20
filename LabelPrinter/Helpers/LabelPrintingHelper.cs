@@ -1,380 +1,133 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Printing;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Markup;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Diagnostics;
 using LabelPrinter.Models;
-using ZXing;
-using ZXing.Common;
-using ZXing.Rendering;
 
 namespace LabelPrinter.Helpers
 {
     public static class LabelPrintingHelper
     {
-        /// <summary>
-        /// Print a number of labels using the provided printable objects definition.
-        /// Each PrintableObject should have X, Y, Width and Height set in device-independent units (1/96 inch).
-        /// </summary>
-        public static void PrintLabels(IEnumerable<PrintableObject> printableObjects, string printerName, int copies)
+        public static void PrintLabels(LabelDocument document, string printerName, int copies)
         {
-            if (printableObjects == null) throw new ArgumentNullException(nameof(printableObjects));
-            if (string.IsNullOrWhiteSpace(printerName)) throw new ArgumentException("printerName");
-            if (copies <= 0) throw new ArgumentOutOfRangeException(nameof(copies));
+            if (document == null) throw new ArgumentNullException(nameof(document));
+            if (string.IsNullOrWhiteSpace(printerName)) throw new ArgumentException("Printer name is required.", nameof(printerName));
+            if (copies <= 0) throw new ArgumentOutOfRangeException(nameof(copies), "Label count must be greater than 0.");
 
-            LocalPrintServer localPrintServer = new LocalPrintServer();
-            PrintQueue? printQueue = null;
-            try
+            var validationErrors = LabelRenderer.ValidateDocument(document);
+            if (validationErrors.Count > 0)
             {
-                // Try to find the named print queue
-                printQueue = localPrintServer.GetPrintQueue(printerName);
+                throw new InvalidOperationException(string.Join(Environment.NewLine, validationErrors));
             }
 
-
-            catch
-            {
-                // fallback: try to find by enumerating
-                foreach (var pq in localPrintServer.GetPrintQueues())
-                {
-                    if (string.Equals(pq.Name, printerName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        printQueue = pq;
-                        break;
-                    }
-                }
-            }
-
-            if (printQueue == null)
-                throw new InvalidOperationException($"Printer '{printerName}' not found.");
+            var snapshot = document.CreateSnapshot();
+            var labelSize = LabelRenderer.GetLabelSize(snapshot);
+            var printQueue = FindPrintQueue(printerName);
+            var printTicket = CreatePrintTicket(printQueue, labelSize);
+            var fixedDocument = CreateFixedDocument(snapshot, labelSize, copies);
 
             var xpsWriter = PrintQueue.CreateXpsDocumentWriter(printQueue);
+            xpsWriter.Write(fixedDocument, printTicket);
+        }
 
-            for (int i = 0; i < copies; i++)
+        private static PrintQueue FindPrintQueue(string printerName)
+        {
+            var localPrintServer = new LocalPrintServer();
+            try
             {
-                var visual = RenderLabelVisual(printableObjects);
-                // Write visual to the specified printer
-                xpsWriter.Write(visual);
+                return localPrintServer.GetPrintQueue(printerName);
+            }
+            catch
+            {
+                foreach (var queue in localPrintServer.GetPrintQueues())
+                {
+                    if (string.Equals(queue.Name, printerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return queue;
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Printer '{printerName}' was not found.");
+        }
+
+        private static PrintTicket CreatePrintTicket(PrintQueue printQueue, Size labelSize)
+        {
+            var delta = new PrintTicket
+            {
+                PageMediaSize = new PageMediaSize(labelSize.Width, labelSize.Height)
+            };
+
+            try
+            {
+                var baseTicket = printQueue.UserPrintTicket ?? printQueue.DefaultPrintTicket;
+                var result = printQueue.MergeAndValidatePrintTicket(baseTicket, delta);
+                return result.ValidatedPrintTicket;
+            }
+            catch
+            {
+                return delta;
             }
         }
 
-        private static DrawingVisual RenderLabelVisual(IEnumerable<PrintableObject> printableObjects)
+        private static FixedDocument CreateFixedDocument(LabelDocument snapshot, Size labelSize, int copies)
         {
-            var dv = new DrawingVisual();
-            using (var dc = dv.RenderOpen())
+            var document = new FixedDocument();
+            document.DocumentPaginator.PageSize = labelSize;
+
+            for (var i = 0; i < copies; i++)
             {
-                foreach (var obj in printableObjects)
+                var page = new FixedPage
                 {
-                    dc.PushTransform(new TranslateTransform(obj.X, obj.Y));
-                    if (obj.Rotation != 0)
-                    {
-                        // rotate around top-left + half width/height
-                        dc.PushTransform(new RotateTransform(obj.Rotation, obj.Width / 2.0, obj.Height / 2.0));
-                    }
+                    Width = labelSize.Width,
+                    Height = labelSize.Height,
+                    Background = Brushes.White
+                };
 
-                    Rect dest = new Rect(0, 0, Math.Max(0.0, obj.Width), Math.Max(0.0, obj.Height));
+                var labelElement = new LabelPrintElement(snapshot)
+                {
+                    Width = labelSize.Width,
+                    Height = labelSize.Height
+                };
 
-                    switch (obj)
-                    {
-                        case ImagePrintable img:
-                            if (!string.IsNullOrWhiteSpace(img.ImagePath) && File.Exists(img.ImagePath))
-                            {
-                                    try
-                                    {
-                                        var bmp = new BitmapImage();
-                                        bmp.BeginInit();
-                                        bmp.CacheOption = BitmapCacheOption.OnLoad;
-                                        bmp.UriSource = new Uri(Path.GetFullPath(img.ImagePath));
-                                        bmp.EndInit();
-                                        bmp.Freeze();
+                FixedPage.SetLeft(labelElement, 0);
+                FixedPage.SetTop(labelElement, 0);
+                page.Children.Add(labelElement);
 
-                                        // Optionally preserve aspect ratio
-                                        if (img.MaintainAspectRatio)
-                                        {
-                                            double w = bmp.PixelWidth / bmp.DpiX * 96.0;
-                                            double h = bmp.PixelHeight / bmp.DpiY * 96.0;
-                                            double scale = Math.Min(dest.Width / w, dest.Height / h);
-                                            double drawW = w * scale;
-                                            double drawH = h * scale;
-                                            double offsetX = (dest.Width - drawW) / 2.0;
-                                            double offsetY = (dest.Height - drawH) / 2.0;
-                                            dc.DrawImage(bmp, new Rect(offsetX, offsetY, drawW, drawH));
-                                        }
-                                        else
-                                        {
-                                            dc.DrawImage(bmp, dest);
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Trace.WriteLine($"Image load failed for '{img.ImagePath}': {ex}");
-                                    }
-                            }
-                            break;
-
-                        case TextPrintable txt:
-                            {
-                                if (!string.IsNullOrEmpty(txt.Text))
-                                {
-                                    var typeface = new Typeface(new System.Windows.Media.FontFamily(txt.FontFamily), txt.FontStyle, txt.FontWeight, FontStretches.Normal);
-                                    // pixelsPerDip: use 1.0 as a reasonable default
-                                    var formatted = new FormattedText(
-                                        txt.Text,
-                                        CultureInfo.CurrentUICulture,
-                                        FlowDirection.LeftToRight,
-                                        typeface,
-                                        txt.FontSize,
-                                        txt.Foreground,
-                                        1.0);
-
-                                    // constrain width/height
-                                    formatted.MaxTextWidth = Math.Max(0.0, txt.Width);
-                                    formatted.MaxTextHeight = Math.Max(0.0, txt.Height);
-
-                                    // apply horizontal alignment
-                                    formatted.TextAlignment = txt.HorizontalTextAlignment;
-
-                                    double drawX = 0;
-                                    switch (txt.HorizontalTextAlignment)
-                                    {
-                                        case TextAlignment.Center:
-                                            drawX = (dest.Width - formatted.Width) / 2.0;
-                                            break;
-                                        case TextAlignment.Right:
-                                            drawX = dest.Width - formatted.Width;
-                                            break;
-                                        case TextAlignment.Justify:
-                                        case TextAlignment.Left:
-                                        default:
-                                            drawX = 0;
-                                            break;
-                                    }
-
-                                    // apply vertical alignment
-                                    double drawY = 0;
-                                    switch (txt.VerticalTextAlignment)
-                                    {
-                                        case VerticalTextAlignment.Center:
-                                            drawY = (dest.Height - formatted.Height) / 2.0;
-                                            break;
-                                        case VerticalTextAlignment.Bottom:
-                                            drawY = dest.Height - formatted.Height;
-                                            break;
-                                        case VerticalTextAlignment.Top:
-                                        default:
-                                            drawY = 0;
-                                            break;
-                                    }
-
-                                    drawX = Math.Max(0.0, drawX);
-                                    drawY = Math.Max(0.0, drawY);
-
-                                    dc.DrawText(formatted, new Point(drawX, drawY));
-                                }
-                            }
-                            break;
-
-                        case BarcodePrintable bc:
-                            {
-                                if (!string.IsNullOrEmpty(bc.BarcodeText))
-                                {
-                                    var format = bc.BarcodeType == BarcodeImageType.QR ? BarcodeFormat.QR_CODE : BarcodeFormat.CODE_128;
-
-                                    var writer = new BarcodeWriterPixelData
-                                    {
-                                        Format = format,
-                                        Options = new EncodingOptions
-                                        {
-                                            Width = Math.Max(1, (int)Math.Round(bc.Width)),
-                                            Height = Math.Max(1, (int)Math.Round(bc.Height)),
-                                            Margin = 0
-                                        }
-                                    };
-
-                                    try
-                                    {
-                                        var pixelData = writer.Write(bc.BarcodeText);
-
-                                        // ZXing commonly returns RGB24-like bytes (3 bytes per pixel). To be robust and
-                                        // WPF-friendly, convert to Bgra32 (4 bytes per pixel) with opaque alpha.
-                                        BitmapSource bitmap;
-                                        var px = pixelData.Pixels;
-                                        int w = pixelData.Width;
-                                        int h = pixelData.Height;
-                                        if (px != null && px.Length == w * h * 3)
-                                        {
-                                            var outPixels = new byte[w * h * 4];
-                                            for (int i = 0, j = 0; i < w * h; i++, j += 3)
-                                            {
-                                                byte r = px[j + 0];
-                                                byte g = px[j + 1];
-                                                byte b = px[j + 2];
-                                                int dst = i * 4;
-                                                outPixels[dst + 0] = b;
-                                                outPixels[dst + 1] = g;
-                                                outPixels[dst + 2] = r;
-                                                outPixels[dst + 3] = 255;
-                                            }
-
-                                            int stride = w * 4;
-                                            bitmap = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, outPixels, stride);
-                                        }
-                                        else if (px != null && px.Length == w * h)
-                                        {
-                                            // single byte per pixel -> treat as grayscale
-                                            int stride = w * 1;
-                                            bitmap = BitmapSource.Create(w, h, 96, 96, PixelFormats.Gray8, null, px, stride);
-                                        }
-                                        else
-                                        {
-                                            // fallback: try to create as Rgb24 if lengths match
-                                            if (px != null && px.Length == w * h * 3)
-                                            {
-                                                int stride = w * 3;
-                                                bitmap = BitmapSource.Create(w, h, 96, 96, PixelFormats.Rgb24, null, px, stride);
-                                            }
-                                            else
-                                            {
-                                                throw new InvalidOperationException("Unexpected pixel data format from barcode writer.");
-                                            }
-                                        }
-
-                                        bitmap.Freeze();
-                                        dc.DrawImage(bitmap, dest);
-
-                                        if (bc.ShowBarcodeText)
-                                        {
-                                            var tf = new Typeface("Segoe UI");
-                                            var ft = new FormattedText(bc.BarcodeText, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, tf, 8, Brushes.Black, 1.0)
-                                            {
-                                                MaxTextWidth = dest.Width
-                                            };
-
-                                            dc.DrawText(ft, new Point(0, dest.Height + 2));
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Trace.WriteLine($"Barcode generation failed: {ex}");
-                                    }
-                                }
-                            }
-                            break;
-
-                        case RectanglePrintable rect:
-                            {
-                                // No fill: rectangles are stroke-only to avoid interfering with other objects.
-
-                                // Prepare pen for stroke
-                                var pen = new Pen(rect.Stroke ?? Brushes.Black, Math.Max(0.0, rect.StrokeThickness));
-                                // Apply dash/dot/solid or custom dash pattern
-                                if (rect.DashPattern != null && rect.DashPattern.Length > 0)
-                                {
-                                    pen.DashStyle = new DashStyle(rect.DashPattern, 0.0);
-                                }
-                                else
-                                {
-                                    switch (rect.LineStyle)
-                                    {
-                                        case LineStyle.Dash:
-                                            pen.DashStyle = DashStyles.Dash;
-                                            break;
-                                        case LineStyle.Dot:
-                                            pen.DashStyle = DashStyles.Dot;
-                                            break;
-                                        case LineStyle.Continuous:
-                                        default:
-                                            pen.DashStyle = DashStyles.Solid;
-                                            break;
-                                    }
-                                }
-                                pen.Freeze();
-
-                                if (rect.CornerRadius > 0)
-                                {
-                                    dc.DrawRoundedRectangle(null, pen, dest, rect.CornerRadius, rect.CornerRadius);
-                                }
-                                else
-                                {
-                                    dc.DrawRectangle(null, pen, dest);
-                                }
-                            }
-                            break;
-
-                        default:
-                            break;
-                    }
-
-                    if (obj.Rotation != 0)
-                    {
-                        dc.Pop(); // pop rotate
-                    }
-                    dc.Pop(); // pop translate
-                }
+                var pageContent = new PageContent();
+                ((IAddChild)pageContent).AddChild(page);
+                document.Pages.Add(pageContent);
             }
 
-            return dv;
+            return document;
         }
 
-        /// <summary>
-        /// Renders the printable objects into an ImageSource for preview purposes.
-        /// pixelWidth/pixelHeight are the output bitmap size in pixels.
-        /// labelWidth and labelHeight are the physical label size in device-independent units (1/96 inch).
-        /// If labelWidth/labelHeight are not provided (<=0) the content is rendered to fill the bitmap.
-        /// </summary>
-        public static ImageSource RenderPreview(IEnumerable<PrintableObject> printableObjects, int pixelWidth, int pixelHeight, double labelWidth = 0, double labelHeight = 0)
+        private sealed class LabelPrintElement : FrameworkElement
         {
-            if (pixelWidth <= 0) pixelWidth = 400;
-            if (pixelHeight <= 0) pixelHeight = 300;
+            private readonly LabelDocument _document;
 
-            var contentVisual = RenderLabelVisual(printableObjects);
-
-            var container = new DrawingVisual();
-            using (var dc = container.RenderOpen())
+            public LabelPrintElement(LabelDocument document)
             {
-                // If label dimensions provided, draw a white label rectangle scaled to fit the bitmap.
-                if (labelWidth > 0 && labelHeight > 0)
-                {
-                    double scaleX = (double)pixelWidth / labelWidth;
-                    double scaleY = (double)pixelHeight / labelHeight;
-                    double scale = Math.Min(scaleX, scaleY);
-
-                    double drawW = labelWidth * scale;
-                    double drawH = labelHeight * scale;
-
-                    double offsetX = Math.Floor(((double)pixelWidth - drawW) / 2.0);
-                    double offsetY = Math.Floor(((double)pixelHeight - drawH) / 2.0);
-
-                    // Draw background (transparent) then white label area with border
-                    var labelRect = new Rect(offsetX, offsetY, drawW, drawH);
-                    dc.DrawRectangle(Brushes.White, new Pen(Brushes.Black, 1.0), labelRect);
-
-                    // Draw the contentVisual into the label area using a VisualBrush scaled appropriately
-                    var vb = new VisualBrush(contentVisual)
-                    {
-                        Stretch = Stretch.None,
-                        AlignmentX = AlignmentX.Left,
-                        AlignmentY = AlignmentY.Top,
-                        Transform = new ScaleTransform(scale, scale)
-                    };
-
-                    dc.DrawRectangle(vb, null, labelRect);
-                }
-                else
-                {
-                    // No label size: render contentVisual to fill bitmap
-                    var vb = new VisualBrush(contentVisual) { Stretch = Stretch.Uniform };
-                    dc.DrawRectangle(vb, null, new Rect(0, 0, pixelWidth, pixelHeight));
-                }
+                _document = document;
             }
 
-            var bmp = new RenderTargetBitmap(pixelWidth, pixelHeight, 96, 96, PixelFormats.Pbgra32);
-            bmp.Render(container);
-            bmp.Freeze();
-            return bmp;
+            protected override Size MeasureOverride(Size availableSize)
+            {
+                return LabelRenderer.GetLabelSize(_document);
+            }
+
+            protected override void OnRender(DrawingContext drawingContext)
+            {
+                LabelRenderer.DrawLabel(drawingContext, _document, new LabelRenderOptions
+                {
+                    DrawLabelBackground = true,
+                    DrawLabelBorder = false,
+                    ShowValidationErrors = false,
+                    PixelsPerDip = 1.0
+                });
+            }
         }
     }
 }

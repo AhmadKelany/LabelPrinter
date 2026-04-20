@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using LabelPrinter.Models;
 
 namespace LabelPrinter.Controls
 {
@@ -7,6 +8,7 @@ namespace LabelPrinter.Controls
         public RectanglePrintableControl()
         {
             InitializeComponent();
+            LineStyleCombo.ItemsSource = Enum.GetValues<LineStyle>();
         }
     }
 }

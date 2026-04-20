@@ -1,6 +1,6 @@
-using System.Windows.Controls;
-using Microsoft.Win32;
 using LabelPrinter.Models;
+using Microsoft.Win32;
+using System.Windows.Controls;
 
 
 namespace LabelPrinter.Controls

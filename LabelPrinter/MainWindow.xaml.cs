@@ -1,201 +1,231 @@
-﻿using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using System.Collections.ObjectModel;
-using System.Printing;
-using LabelPrinter.Models;
-using LabelPrinter.Helpers;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Windows.Threading;
-using System.Globalization;
+using System.Printing;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using LabelPrinter.Helpers;
+using LabelPrinter.Models;
 
 namespace LabelPrinter;
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
+
 public partial class MainWindow : Window
 {
-    private ObservableCollection<PrintableObject> _items = new ObservableCollection<PrintableObject>();
-    private readonly DispatcherTimer _previewTimer;
-    private const int PreviewDebounceMs = 300;
+    private readonly LabelDocument _document = new();
 
     public MainWindow()
     {
         InitializeComponent();
 
-        ItemsListBox.ItemsSource = _items;
+        DataContext = _document;
+        ItemsListBox.ItemsSource = _document.Items;
+        PreviewSurface.Document = _document;
 
-        // watch collection changes to attach/detach property changed handlers
-        _items.CollectionChanged += Items_CollectionChanged;
+        _document.PropertyChanged += Document_PropertyChanged;
+        _document.Items.CollectionChanged += Items_CollectionChanged;
+        AddHandler(Validation.ErrorEvent, new EventHandler<ValidationErrorEventArgs>(Window_ValidationError));
 
-        // preview debounce timer
-        _previewTimer = new DispatcherTimer()
-        {
-            Interval = TimeSpan.FromMilliseconds(PreviewDebounceMs)
-        };
-        _previewTimer.Tick += PreviewTimer_Tick;
-
-        // if collection changes initially, ensure preview updates (debounced)
-        RestartPreviewTimer();
-
-        // populate printers
-        try
-        {
-            var server = new LocalPrintServer();
-            foreach (var pq in server.GetPrintQueues())
-            {
-                PrintersCombo.Items.Add(pq.Name);
-            }
-            if (PrintersCombo.Items.Count > 0) PrintersCombo.SelectedIndex = 0;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Trace.WriteLine($"Printer enumeration failed: {ex}");
-            // ignore
-        }
+        LoadPrinters();
+        UpdatePreview();
+        UpdatePrintButtonState();
     }
 
     private void AddImageBtn_Click(object sender, RoutedEventArgs e)
     {
-        var img = new ImagePrintable { X = 10, Y = 10, Width = 100, Height = 50 };
-        _items.Add(img);
+        _document.Items.Add(new ImagePrintable { XMm = 5, YMm = 5, WidthMm = 25, HeightMm = 15 });
     }
 
     private void AddTextBtn_Click(object sender, RoutedEventArgs e)
     {
-        var txt = new TextPrintable { X = 10, Y = 10, Width = 100, Height = 30, Text = "Text" };
-        _items.Add(txt);
+        _document.Items.Add(new TextPrintable { XMm = 5, YMm = 5, WidthMm = 30, HeightMm = 8, Text = "Text" });
     }
 
     private void AddBarcodeBtn_Click(object sender, RoutedEventArgs e)
     {
-        var bc = new BarcodePrintable { X = 10, Y = 10, Width = 120, Height = 60, BarcodeText = "123456" };
-        _items.Add(bc);
+        _document.Items.Add(new BarcodePrintable { XMm = 5, YMm = 12, WidthMm = 38, HeightMm = 14, BarcodeText = "123456" });
     }
 
     private void AddRectBtn_Click(object sender, RoutedEventArgs e)
     {
-        var r = new RectanglePrintable { X = 5, Y = 5, Width = 150, Height = 80, StrokeThickness = 1 };
-        _items.Add(r);
+        _document.Items.Add(new RectanglePrintable { XMm = 3, YMm = 3, WidthMm = 35, HeightMm = 18, StrokeThicknessMm = 0.25 });
+    }
+
+    private void RemoveItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: PrintableObject item })
+        {
+            _document.Items.Remove(item);
+        }
     }
 
     private void Items_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.NewItems != null)
         {
-            foreach (var ni in e.NewItems)
+            foreach (var item in e.NewItems.OfType<INotifyPropertyChanged>())
             {
-                if (ni is INotifyPropertyChanged inpc)
-                {
-                    inpc.PropertyChanged += Item_PropertyChanged;
-                }
+                item.PropertyChanged += Item_PropertyChanged;
             }
         }
 
         if (e.OldItems != null)
         {
-            foreach (var oi in e.OldItems)
+            foreach (var item in e.OldItems.OfType<INotifyPropertyChanged>())
             {
-                if (oi is INotifyPropertyChanged inpc)
-                {
-                    inpc.PropertyChanged -= Item_PropertyChanged;
-                }
+                item.PropertyChanged -= Item_PropertyChanged;
             }
         }
 
-        // Refresh preview on collection change (debounced)
-        RestartPreviewTimer();
+        UpdatePreview();
+        UpdatePrintButtonState();
+    }
+
+    private void Document_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        UpdatePreview();
+        UpdatePrintButtonState();
     }
 
     private void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // A property of an item changed; update preview (debounced)
-        RestartPreviewTimer();
-    }
-
-    private void RefreshPreviewBtn_Click(object sender, RoutedEventArgs e)
-    {
-        // Immediate preview on manual refresh
         UpdatePreview();
+        UpdatePrintButtonState();
     }
 
-    private void RestartPreviewTimer()
+    private void CountTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_previewTimer?.IsEnabled == true)
-        {
-            _previewTimer.Stop();
-        }
-        // show pending indicator
-        try
-        {
-            PreviewPendingPanel?.Visibility = Visibility.Visible;
-        }
-        catch (Exception ex) {
-            System.Diagnostics.Trace.WriteLine($"Preview pending panel not initialized: {ex}");
-        }
-        _previewTimer?.Start();
+        UpdateCountValidationState();
+        UpdatePrintButtonState();
     }
 
-    private void PreviewTimer_Tick(object? sender, EventArgs e)
+    private void PrintersCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _previewTimer.Stop();
-        UpdatePreview();
+        UpdatePrintButtonState();
     }
 
-    private void UpdatePreview()
+    private void Window_ValidationError(object? sender, ValidationErrorEventArgs e)
     {
-        // hide pending indicator
-        try
-        {
-            PreviewPendingPanel.Visibility = Visibility.Collapsed;
-        }
-        catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"Unable to hide preview pending panel: {ex}"); }
-        // Determine label dimensions from textboxes (cm -> device-independent units)
-        double labelWidthUnits = 0;
-        double labelHeightUnits = 0;
-        if (double.TryParse(LabelWidthTextBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var wCm) && wCm > 0
-            && double.TryParse(LabelHeightTextBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var hCm) && hCm > 0)
-        {
-            // 1 cm = 96 / 2.54 device-independent units
-            const double unitsPerCm = 96.0 / 2.54;
-            labelWidthUnits = wCm * unitsPerCm;
-            labelHeightUnits = hCm * unitsPerCm;
-        }
-
-        // Render preview at fixed size; pass label size in device-independent units if available
-        ImageSource img;
-        if (labelWidthUnits > 0 && labelHeightUnits > 0)
-            img = LabelPrintingHelper.RenderPreview(_items, 600, 800, labelWidthUnits, labelHeightUnits);
-        else
-            img = LabelPrintingHelper.RenderPreview(_items, 600, 800);
-        PreviewImage.Source = img;
-    }
-
-    private void LabelSizeTextBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        RestartPreviewTimer();
+        UpdatePrintButtonState();
     }
 
     private void PrintBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (PrintersCombo.SelectedItem == null) return;
-        if (!int.TryParse(CountTextBox.Text, out int copies) || copies <= 0) copies = 1;
-        var printerName = PrintersCombo.SelectedItem.ToString() ?? string.Empty;
+        if (!TryValidateBeforePrint(out var copies, out var printerName, out var message))
+        {
+            MessageBox.Show(this, message, "Cannot print", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         try
         {
-            LabelPrintingHelper.PrintLabels(_items, printerName, copies);
+            LabelPrintingHelper.PrintLabels(_document, printerName, copies);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "Print failed: " + ex.Message);
+            MessageBox.Show(this, "Print failed: " + ex.Message, "Print failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void LoadPrinters()
+    {
+        try
+        {
+            var server = new LocalPrintServer();
+            foreach (var queue in server.GetPrintQueues())
+            {
+                PrintersCombo.Items.Add(queue.Name);
+            }
+
+            if (PrintersCombo.Items.Count > 0)
+            {
+                PrintersCombo.SelectedIndex = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"Printer enumeration failed: {ex}");
+        }
+    }
+
+    private void UpdatePreview()
+    {
+        PreviewSurface?.InvalidateMeasure();
+        PreviewSurface?.InvalidateVisual();
+    }
+
+    private void UpdatePrintButtonState()
+    {
+        if (PrintBtn == null) return;
+        PrintBtn.IsEnabled =
+            PrintersCombo?.SelectedItem != null &&
+            TryGetCopies(out _) &&
+            !HasValidationError(this) &&
+            LabelRenderer.ValidateDocument(_document).Count == 0;
+    }
+
+    private void UpdateCountValidationState()
+    {
+        if (CountTextBox == null) return;
+
+        if (TryGetCopies(out _))
+        {
+            CountTextBox.ClearValue(BorderBrushProperty);
+            CountTextBox.ClearValue(ToolTipProperty);
+            return;
+        }
+
+        CountTextBox.BorderBrush = Brushes.Red;
+        CountTextBox.ToolTip = "Label count must be a whole number greater than 0.";
+    }
+
+    private bool TryValidateBeforePrint(out int copies, out string printerName, out string message)
+    {
+        copies = 0;
+        printerName = PrintersCombo.SelectedItem?.ToString() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(printerName))
+        {
+            message = "Select a printer first.";
+            return false;
+        }
+
+        if (!TryGetCopies(out copies))
+        {
+            message = "Label count must be a whole number greater than 0.";
+            return false;
+        }
+
+        if (HasValidationError(this))
+        {
+            message = "Fix the highlighted fields before printing.";
+            return false;
+        }
+
+        var validationErrors = LabelRenderer.ValidateDocument(_document);
+        if (validationErrors.Count > 0)
+        {
+            message = string.Join(Environment.NewLine, validationErrors);
+            return false;
+        }
+
+        message = string.Empty;
+        return true;
+    }
+
+    private bool TryGetCopies(out int copies)
+    {
+        return int.TryParse(CountTextBox?.Text, out copies) && copies > 0;
+    }
+
+    private static bool HasValidationError(DependencyObject root)
+    {
+        if (Validation.GetHasError(root)) return true;
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            if (HasValidationError(VisualTreeHelper.GetChild(root, i))) return true;
+        }
+
+        return false;
     }
 }
