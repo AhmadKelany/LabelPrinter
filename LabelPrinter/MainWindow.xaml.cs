@@ -37,7 +37,7 @@ public partial class MainWindow : Window
         _items.CollectionChanged += Items_CollectionChanged;
 
         // preview debounce timer
-        _previewTimer = new DispatcherTimer(DispatcherPriority.Normal)
+        _previewTimer = new DispatcherTimer()
         {
             Interval = TimeSpan.FromMilliseconds(PreviewDebounceMs)
         };
@@ -56,8 +56,9 @@ public partial class MainWindow : Window
             }
             if (PrintersCombo.Items.Count > 0) PrintersCombo.SelectedIndex = 0;
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Trace.WriteLine($"Printer enumeration failed: {ex}");
             // ignore
         }
     }
@@ -137,8 +138,8 @@ public partial class MainWindow : Window
         {
             PreviewPendingPanel?.Visibility = Visibility.Visible;
         }
-        catch {
-            // ignore if not yet initialized
+        catch (Exception ex) {
+            System.Diagnostics.Trace.WriteLine($"Preview pending panel not initialized: {ex}");
         }
         _previewTimer?.Start();
     }
@@ -156,7 +157,7 @@ public partial class MainWindow : Window
         {
             PreviewPendingPanel.Visibility = Visibility.Collapsed;
         }
-        catch { }
+        catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"Unable to hide preview pending panel: {ex}"); }
         // Determine label dimensions from textboxes (cm -> device-independent units)
         double labelWidthUnits = 0;
         double labelHeightUnits = 0;

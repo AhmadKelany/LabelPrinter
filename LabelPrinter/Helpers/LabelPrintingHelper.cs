@@ -6,6 +6,7 @@ using System.Printing;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Diagnostics;
 using LabelPrinter.Models;
 using ZXing;
 using ZXing.Common;
@@ -81,36 +82,36 @@ namespace LabelPrinter.Helpers
                         case ImagePrintable img:
                             if (!string.IsNullOrWhiteSpace(img.ImagePath) && File.Exists(img.ImagePath))
                             {
-                                try
-                                {
-                                    var bmp = new BitmapImage();
-                                    bmp.BeginInit();
-                                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                                    bmp.UriSource = new Uri(Path.GetFullPath(img.ImagePath));
-                                    bmp.EndInit();
-                                    bmp.Freeze();
+                                    try
+                                    {
+                                        var bmp = new BitmapImage();
+                                        bmp.BeginInit();
+                                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                                        bmp.UriSource = new Uri(Path.GetFullPath(img.ImagePath));
+                                        bmp.EndInit();
+                                        bmp.Freeze();
 
-                                    // Optionally preserve aspect ratio
-                                    if (img.MaintainAspectRatio)
-                                    {
-                                        double w = bmp.PixelWidth / bmp.DpiX * 96.0;
-                                        double h = bmp.PixelHeight / bmp.DpiY * 96.0;
-                                        double scale = Math.Min(dest.Width / w, dest.Height / h);
-                                        double drawW = w * scale;
-                                        double drawH = h * scale;
-                                        double offsetX = (dest.Width - drawW) / 2.0;
-                                        double offsetY = (dest.Height - drawH) / 2.0;
-                                        dc.DrawImage(bmp, new Rect(offsetX, offsetY, drawW, drawH));
+                                        // Optionally preserve aspect ratio
+                                        if (img.MaintainAspectRatio)
+                                        {
+                                            double w = bmp.PixelWidth / bmp.DpiX * 96.0;
+                                            double h = bmp.PixelHeight / bmp.DpiY * 96.0;
+                                            double scale = Math.Min(dest.Width / w, dest.Height / h);
+                                            double drawW = w * scale;
+                                            double drawH = h * scale;
+                                            double offsetX = (dest.Width - drawW) / 2.0;
+                                            double offsetY = (dest.Height - drawH) / 2.0;
+                                            dc.DrawImage(bmp, new Rect(offsetX, offsetY, drawW, drawH));
+                                        }
+                                        else
+                                        {
+                                            dc.DrawImage(bmp, dest);
+                                        }
                                     }
-                                    else
+                                    catch (Exception ex)
                                     {
-                                        dc.DrawImage(bmp, dest);
+                                        Trace.WriteLine($"Image load failed for '{img.ImagePath}': {ex}");
                                     }
-                                }
-                                catch
-                                {
-                                    // Ignore image loading errors for now
-                                }
                             }
                             break;
 
@@ -197,13 +198,51 @@ namespace LabelPrinter.Helpers
                                     {
                                         var pixelData = writer.Write(bc.BarcodeText);
 
-                                        // Create BitmapSource from pixel data. ZXing returns RGB24-like bytes in PixelData by default
-                                        PixelFormat pixFmt = PixelFormats.Gray8;
-                                        int stride = pixelData.Width * (pixFmt.BitsPerPixel / 8);
+                                        // ZXing commonly returns RGB24-like bytes (3 bytes per pixel). To be robust and
+                                        // WPF-friendly, convert to Bgra32 (4 bytes per pixel) with opaque alpha.
+                                        BitmapSource bitmap;
+                                        var px = pixelData.Pixels;
+                                        int w = pixelData.Width;
+                                        int h = pixelData.Height;
+                                        if (px != null && px.Length == w * h * 3)
+                                        {
+                                            var outPixels = new byte[w * h * 4];
+                                            for (int i = 0, j = 0; i < w * h; i++, j += 3)
+                                            {
+                                                byte r = px[j + 0];
+                                                byte g = px[j + 1];
+                                                byte b = px[j + 2];
+                                                int dst = i * 4;
+                                                outPixels[dst + 0] = b;
+                                                outPixels[dst + 1] = g;
+                                                outPixels[dst + 2] = r;
+                                                outPixels[dst + 3] = 255;
+                                            }
 
-                                        BitmapSource bitmap = BitmapSource.Create(pixelData.Width, pixelData.Height, 96, 96, pixFmt, null, pixelData.Pixels, stride);
+                                            int stride = w * 4;
+                                            bitmap = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, outPixels, stride);
+                                        }
+                                        else if (px != null && px.Length == w * h)
+                                        {
+                                            // single byte per pixel -> treat as grayscale
+                                            int stride = w * 1;
+                                            bitmap = BitmapSource.Create(w, h, 96, 96, PixelFormats.Gray8, null, px, stride);
+                                        }
+                                        else
+                                        {
+                                            // fallback: try to create as Rgb24 if lengths match
+                                            if (px != null && px.Length == w * h * 3)
+                                            {
+                                                int stride = w * 3;
+                                                bitmap = BitmapSource.Create(w, h, 96, 96, PixelFormats.Rgb24, null, px, stride);
+                                            }
+                                            else
+                                            {
+                                                throw new InvalidOperationException("Unexpected pixel data format from barcode writer.");
+                                            }
+                                        }
+
                                         bitmap.Freeze();
-
                                         dc.DrawImage(bitmap, dest);
 
                                         if (bc.ShowBarcodeText)
@@ -217,9 +256,9 @@ namespace LabelPrinter.Helpers
                                             dc.DrawText(ft, new Point(0, dest.Height + 2));
                                         }
                                     }
-                                    catch
+                                    catch (Exception ex)
                                     {
-                                        // ignore barcode generation errors
+                                        Trace.WriteLine($"Barcode generation failed: {ex}");
                                     }
                                 }
                             }
