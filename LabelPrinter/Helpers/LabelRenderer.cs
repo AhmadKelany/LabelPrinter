@@ -123,6 +123,11 @@ namespace LabelPrinter.Helpers
                 pushedRotation = true;
             }
 
+            if (ReferenceEquals(options.HighlightedItem, item) && options.HighlightBrush != null)
+            {
+                dc.DrawRectangle(options.HighlightBrush, null, rect);
+            }
+
             dc.PushClip(new RectangleGeometry(rect));
             try
             {

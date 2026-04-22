@@ -1,3 +1,6 @@
+using System.Windows.Media;
+using LabelPrinter.Models;
+
 namespace LabelPrinter.Helpers
 {
     public sealed class LabelRenderOptions
@@ -8,5 +11,7 @@ namespace LabelPrinter.Helpers
         public double PixelsPerDip { get; set; } = 1.0;
         public double LabelCornerRadiusDip { get; set; }
         public int BarcodeQuietZoneModules { get; set; } = 2;
+        public PrintableObject? HighlightedItem { get; set; }
+        public Brush HighlightBrush { get; set; } = new SolidColorBrush(Color.FromRgb(250, 244, 232));
     }
 }

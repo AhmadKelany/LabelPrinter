@@ -15,10 +15,23 @@ namespace LabelPrinter.Controls
                 typeof(LabelPreviewSurface),
                 new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender, OnDocumentChanged));
 
+        public static readonly DependencyProperty HighlightedItemProperty =
+            DependencyProperty.Register(
+                nameof(HighlightedItem),
+                typeof(PrintableObject),
+                typeof(LabelPreviewSurface),
+                new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
         public LabelDocument? Document
         {
             get => (LabelDocument?)GetValue(DocumentProperty);
             set => SetValue(DocumentProperty, value);
+        }
+
+        public PrintableObject? HighlightedItem
+        {
+            get => (PrintableObject?)GetValue(HighlightedItemProperty);
+            set => SetValue(HighlightedItemProperty, value);
         }
 
         protected override Size MeasureOverride(Size availableSize)
@@ -41,7 +54,8 @@ namespace LabelPrinter.Controls
                 DrawLabelBorder = true,
                 ShowValidationErrors = true,
                 LabelCornerRadiusDip = 8.0,
-                PixelsPerDip = dpi.PixelsPerDip
+                PixelsPerDip = dpi.PixelsPerDip,
+                HighlightedItem = HighlightedItem
             });
         }
 

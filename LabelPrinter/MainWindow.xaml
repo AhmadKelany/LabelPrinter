@@ -12,55 +12,72 @@
 
     <Window.Resources>
         <DataTemplate DataType="{x:Type models:ImagePrintable}">
-            <Grid Margin="0,0,0,8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Button Content="Remove" Click="RemoveItem_Click" HorizontalAlignment="Right" Padding="8,3" Margin="0,0,0,4" />
-                <controls:ImagePrintableControl Grid.Row="1" HorizontalAlignment="Stretch" />
+            <Grid Margin="0,0,0,4">
+                <controls:ImagePrintableControl HorizontalAlignment="Stretch"
+                                                IsKeyboardFocusWithinChanged="PrintableControl_IsKeyboardFocusWithinChanged" />
+                <Button Content="Remove"
+                        Click="RemoveItem_Click"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Width="60"
+                        Height="18"
+                        Margin="0,1,4,0"
+                        Panel.ZIndex="1" />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="{x:Type models:TextPrintable}">
-            <Grid Margin="0,0,0,8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Button Content="Remove" Click="RemoveItem_Click" HorizontalAlignment="Right" Padding="8,3" Margin="0,0,0,4" />
-                <controls:TextPrintableControl Grid.Row="1" HorizontalAlignment="Stretch" />
+            <Grid Margin="0,0,0,4">
+                <controls:TextPrintableControl HorizontalAlignment="Stretch"
+                                               IsKeyboardFocusWithinChanged="PrintableControl_IsKeyboardFocusWithinChanged" />
+                <Button Content="Remove"
+                        Click="RemoveItem_Click"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Width="60"
+                        Height="18"
+                        Margin="0,1,4,0"
+                        Panel.ZIndex="1" />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="{x:Type models:BarcodePrintable}">
-            <Grid Margin="0,0,0,8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Button Content="Remove" Click="RemoveItem_Click" HorizontalAlignment="Right" Padding="8,3" Margin="0,0,0,4" />
-                <controls:BarcodePrintableControl Grid.Row="1" HorizontalAlignment="Stretch" />
+            <Grid Margin="0,0,0,4">
+                <controls:BarcodePrintableControl HorizontalAlignment="Stretch"
+                                                  IsKeyboardFocusWithinChanged="PrintableControl_IsKeyboardFocusWithinChanged" />
+                <Button Content="Remove"
+                        Click="RemoveItem_Click"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Width="60"
+                        Height="18"
+                        Margin="0,1,4,0"
+                        Panel.ZIndex="1" />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="{x:Type models:RectanglePrintable}">
-            <Grid Margin="0,0,0,8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Button Content="Remove" Click="RemoveItem_Click" HorizontalAlignment="Right" Padding="8,3" Margin="0,0,0,4" />
-                <controls:RectanglePrintableControl Grid.Row="1" HorizontalAlignment="Stretch" />
+            <Grid Margin="0,0,0,4">
+                <controls:RectanglePrintableControl HorizontalAlignment="Stretch"
+                                                    IsKeyboardFocusWithinChanged="PrintableControl_IsKeyboardFocusWithinChanged" />
+                <Button Content="Remove"
+                        Click="RemoveItem_Click"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Width="60"
+                        Height="18"
+                        Margin="0,1,4,0"
+                        Panel.ZIndex="1" />
             </Grid>
         </DataTemplate>
     </Window.Resources>
 
     <Grid Margin="10">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="380" MinWidth="340" />
+            <ColumnDefinition Width="470" MinWidth="430" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
         <Grid Grid.Column="0" Margin="0,0,10,0">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -75,6 +92,33 @@
             </WrapPanel>
 
             <Grid Grid.Row="1" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Design" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox x:Name="SavedDesignsCombo"
+                          Grid.Column="1"
+                          IsEditable="True"
+                          IsTextSearchEnabled="False"
+                          MinWidth="160" />
+                <Button x:Name="SaveDesignBtn"
+                        Grid.Column="2"
+                        Content="Save"
+                        Click="SaveDesignBtn_Click"
+                        Width="70"
+                        Margin="8,0,0,0" />
+                <Button x:Name="LoadDesignBtn"
+                        Grid.Column="3"
+                        Content="Load"
+                        Click="LoadDesignBtn_Click"
+                        Width="70"
+                        Margin="6,0,0,0" />
+            </Grid>
+
+            <Grid Grid.Row="2" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -94,11 +138,11 @@
             </Grid>
 
             <ListBox x:Name="ItemsListBox"
-                     Grid.Row="2"
+                     Grid.Row="3"
                      HorizontalContentAlignment="Stretch"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
 
-            <Grid Grid.Row="3" Margin="0,8,0,0">
+            <Grid Grid.Row="4" Margin="0,8,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
